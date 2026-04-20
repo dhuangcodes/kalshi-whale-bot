@@ -15,24 +15,6 @@ SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 })
 
-# Kalshi uses city names and player names in titles, not team names
-NBA_KEYWORDS = [
-    # City names Kalshi uses
-    "new york", "boston", "miami", "chicago", "cleveland", "denver",
-    "minneapolis", "oklahoma", "golden state", "memphis", "milwaukee",
-    "new orleans", "atlanta", "detroit", "indiana", "los angeles",
-    "orlando", "philadelphia", "phoenix", "portland", "sacramento",
-    "san antonio", "toronto", "utah", "washington",
-    # Player names for props
-    "lebron", "curry", "durant", "jokic", "giannis", "tatum", "embiid",
-    "luka", "morant", "edwards", "towns", "brunson", "mitchell",
-    "harden", "banchero", "mobley", "allen", "hart", "barrett",
-    # Series ticker prefix
-    "kxmvesportsmultigame", "kxnba",
-]
-
-SPORTS_TICKERS = ["KXMVESPORTSMULTIGAMEEXTENDED", "KXMVESPORTSMULTIGAME"]
-
 
 def _get(path: str, params: dict = {}, retries: int = 3):
     for i in range(retries):
@@ -58,54 +40,23 @@ def _get(path: str, params: dict = {}, retries: int = 3):
     return None
 
 
-def get_nba_markets() -> list[dict]:
-    """Fetch open NBA/sports markets — uses ticker prefix and city/player name matching."""
-    markets = []
-    cursor = None
-    pages = 0
-
-    while pages < 10:
-        params = {"status": "open", "limit": 200}
-        if cursor:
-            params["cursor"] = cursor
-
-        data = _get("/markets", params)
-        if not data:
-            break
-
-        batch = data.get("markets", [])
-        for m in batch:
-            title  = (m.get("title") or "").lower()
-            ticker = (m.get("ticker") or "").upper()
-
-            # Match by ticker prefix (Kalshi sports markets)
-            is_sports_ticker = any(ticker.startswith(t) for t in SPORTS_TICKERS)
-            # Match by NBA city/player names in title
-            is_nba_title = any(kw in title for kw in NBA_KEYWORDS)
-
-            if is_sports_ticker or is_nba_title:
-                markets.append(m)
-
-        cursor = data.get("cursor")
-        log.info(f"Kalshi page {pages}: {len(batch)} markets, {len(markets)} sports so far")
-        pages += 1
-        if not cursor or not batch:
-            break
-
-    return markets
-
-
-def get_market_trades(ticker: str, limit: int = 50) -> list[dict]:
-    """Get recent trades for a specific market."""
-    data = _get(f"/markets/{ticker}/trades", {"limit": limit})
+def get_recent_trades_global(limit: int = 100, cursor: str = None) -> list[dict]:
+    """
+    Get recent trades across ALL Kalshi markets.
+    Much more efficient than polling individual markets.
+    """
+    params = {"limit": limit}
+    if cursor:
+        params["cursor"] = cursor
+    data = _get("/markets/trades", params)
     if data and isinstance(data.get("trades"), list):
         return data["trades"]
     return []
 
 
-def get_global_trades(limit: int = 100) -> list[dict]:
-    """Get recent trades across all markets."""
-    data = _get("/markets/trades", {"limit": limit})
-    if data and isinstance(data.get("trades"), list):
-        return data["trades"]
-    return []
+def get_market_info(ticker: str) -> dict:
+    """Get market details including title."""
+    data = _get(f"/markets/{ticker}")
+    if data and data.get("market"):
+        return data["market"]
+    return {}
