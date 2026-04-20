@@ -42,18 +42,32 @@ TENNIS_KEYWORDS = [
 
 def _get_webhook(title: str) -> str:
     t = title.lower()
-    # Check NBA cities and player names
-    if any(kw in t for kw in NBA_CITIES) or any(kw in t for kw in NBA_PLAYERS):
-        # Double check it's not baseball
-        if not any(kw in t for kw in MLB_KEYWORDS):
-            return WEBHOOK_NBA
+
+    # MLB check first — runs/innings/pitcher = baseball
     if any(kw in t for kw in MLB_KEYWORDS):
         return WEBHOOK_MLB
+
+    # Tennis check
     if any(kw in t for kw in TENNIS_KEYWORDS):
         return WEBHOOK_TENNIS
-    # Sports multigame tickers go to NBA by default
-    if "kxmvesports" in t or "kxnba" in t:
+
+    # NBA check — must have points/rebounds/assists OR NBA player name OR explicit NBA context
+    has_nba_city   = any(kw in t for kw in NBA_CITIES)
+    has_nba_player = any(kw in t for kw in NBA_PLAYERS)
+    has_nba_context = any(kw in t for kw in [
+        "points", "rebounds", "assists", "steals", "blocks",
+        "nba", "basketball", "playoff", "finals", "game 1", "game 2",
+        "game 3", "game 4", "game 5", "game 6", "game 7",
+        "winner", "wins by", "over", "under"
+    ])
+
+    if (has_nba_city or has_nba_player) and has_nba_context:
         return WEBHOOK_NBA
+
+    # Sports multigame tickers with NBA players/cities
+    if ("kxmvesports" in t or "kxnba" in t) and (has_nba_city or has_nba_player):
+        return WEBHOOK_NBA
+
     return WEBHOOK_OTHER
 
 def _route_name(title: str) -> str:
@@ -89,10 +103,12 @@ def send_alert(trade: dict, market: dict, s: Score, same_side: int):
     side_e = "🟢" if side == "YES" else "🔴"
 
     try:
-        yes_price   = float(trade.get("yes_price_dollars") or 0)
-        count       = float(trade.get("count_fp") or trade.get("count", 0))
-        price_cents = yes_price * 100 if taker == "yes" else (1 - yes_price) * 100
-        usd         = count * yes_price if taker == "yes" else count * (1 - yes_price)
+        yes_price = float(trade.get("yes_price_dollars") or 0)
+        no_price  = float(trade.get("no_price_dollars") or 0)
+        count     = float(trade.get("count_fp") or trade.get("count", 0))
+        price_cents = yes_price * 100 if taker == "yes" else no_price * 100
+        # Use pre-calculated USD from main if available, otherwise calculate
+        usd = trade.get("_usd") or (count * yes_price if taker == "yes" else count * no_price)
     except Exception:
         return
 
