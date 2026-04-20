@@ -50,11 +50,12 @@ def _get(path: str, params: dict = {}, retries: int = 3):
 
 
 def get_nba_markets() -> list[dict]:
-    """Fetch all open NBA markets."""
+    """Fetch open NBA markets — max 5 pages to avoid hanging."""
     markets = []
     cursor = None
+    pages = 0
 
-    while True:
+    while pages < 5:
         params = {"status": "open", "limit": 200}
         if cursor:
             params["cursor"] = cursor
@@ -65,12 +66,14 @@ def get_nba_markets() -> list[dict]:
 
         batch = data.get("markets", [])
         for m in batch:
-            title = (m.get("title") or m.get("subtitle") or "").lower()
+            title  = (m.get("title") or m.get("subtitle") or "").lower()
             ticker = (m.get("ticker") or "").upper()
             if any(kw in title for kw in NBA_KEYWORDS) or "NBA" in ticker:
                 markets.append(m)
 
         cursor = data.get("cursor")
+        log.info(f"Kalshi page {pages}: found {len(batch)} markets, {len(markets)} NBA so far")
+        pages += 1
         if not cursor or not batch:
             break
 
