@@ -28,6 +28,7 @@ def score(usd: float, price_cents: float, same_side: int) -> Score:
     elif usd >= 25_000:  sz = 28
     elif usd >= 10_000:  sz = 16
     elif usd >= 5_000:   sz = 7
+    elif usd >= 3_000:   sz = 4
     else:                sz = 0
 
     # --- 2. Consensus (30 pts) ---
