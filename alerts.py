@@ -14,73 +14,87 @@ COLORS = {
     "INFORMATIONAL": 0x888888,
 }
 
-# Kalshi uses city names in titles
-NBA_CITIES = [
-    "new york", "boston", "miami", "chicago", "cleveland", "denver",
-    "minnesota", "oklahoma", "golden state", "memphis", "milwaukee",
-    "new orleans", "atlanta", "detroit", "indiana", "los angeles",
-    "orlando", "philadelphia", "phoenix", "portland", "sacramento",
-    "san antonio", "toronto", "utah", "washington", "brooklyn",
-    "charlotte", "dallas", "houston", "memphis"
+# Explicit NBA team names only — no city names that overlap with MLB
+NBA_TEAMS = [
+    "timberwolves", "wolves", "nuggets", "cavaliers", "cavs", "celtics",
+    "knicks", "bucks", "pacers", "heat", "magic", "76ers", "sixers",
+    "thunder", "warriors", "lakers", "clippers", "suns", "grizzlies",
+    "pelicans", "hawks", "pistons", "raptors", "nets", "hornets",
+    "bulls", "mavericks", "mavs", "rockets", "trail blazers", "blazers",
+    "kings", "spurs", "jazz", "wizards"
 ]
-NBA_PLAYERS = [
-    "lebron", "curry", "durant", "jokic", "giannis", "tatum", "embiid",
-    "luka", "morant", "edwards", "towns", "brunson", "mitchell",
-    "harden", "banchero", "mobley", "allen", "hart", "barrett",
-    "donovan", "jalen", "evan", "jarrett", "nickeil", "jonathan",
-    "karl-anthony", "anthony", "josh", "rj"
+
+# NBA explicit context words
+NBA_CONTEXT = [
+    "points scored", "wins by", "winner", "game 1", "game 2", "game 3",
+    "game 4", "game 5", "game 6", "game 7", "spread", "playoff",
+    "nba", "basketball", "rebounds", "assists"
 ]
-MLB_KEYWORDS = [
+
+# MLB — team names AND baseball-specific words
+MLB_TEAMS = [
     "yankees", "red sox", "dodgers", "mets", "cubs", "braves", "astros",
-    "manzardo", "kwan", "arrighetti", "baseball", "mlb", "pitcher",
-    "home run", "hits", "strikeout"
+    "guardians", "rockies", "tigers", "royals", "angels", "marlins",
+    "brewers", "twins", "phillies", "pirates", "padres", "cardinals",
+    "rays", "rangers", "blue jays", "nationals", "orioles", "athletics",
+    "mariners", "white sox", "reds", "giants"
 ]
+MLB_KEYWORDS = ["runs", "innings", "pitcher", "hits", "strikeout", "mlb", "baseball", " m winner", "total runs"]
+
 TENNIS_KEYWORDS = [
-    "harris", "garin", "llamas", "rodesch", "gaubas", "trungelliti",
-    "tennis", "atp", "wta", "wimbledon", "open", "set", "game"
+    "atp", "wta", "wimbledon", "roland garros", "us open", "australian open",
+    "challenger", "wuning", "tennis", "grand slam", "match winner"
 ]
+
+VIDEOGAME_KEYWORDS = [
+    "cs2", "csgo", "valorant", "league of legends", "lol", "dota",
+    "overwatch", "call of duty", "cod", "navi", "natus vincere", "faze",
+    "vitality", "astralis", "g2", "fnatic", "team liquid", "esport",
+    "blast", "pgl", "iem", "esl", "fortnite"
+]
+
 
 def _get_webhook(title: str) -> str:
     t = title.lower()
 
-    # MLB check first — runs/innings/pitcher = baseball
-    if any(kw in t for kw in MLB_KEYWORDS):
+    # MLB check first — specific team names OR baseball keywords
+    if any(kw in t for kw in MLB_KEYWORDS) or any(kw in t for kw in MLB_TEAMS):
         return WEBHOOK_MLB
 
-    # Tennis check
+    # Tennis
     if any(kw in t for kw in TENNIS_KEYWORDS):
         return WEBHOOK_TENNIS
 
-    # NBA check — must have points/rebounds/assists OR NBA player name OR explicit NBA context
-    has_nba_city   = any(kw in t for kw in NBA_CITIES)
-    has_nba_player = any(kw in t for kw in NBA_PLAYERS)
-    has_nba_context = any(kw in t for kw in [
-        "points", "rebounds", "assists", "steals", "blocks",
-        "nba", "basketball", "playoff", "finals", "game 1", "game 2",
-        "game 3", "game 4", "game 5", "game 6", "game 7",
-        "winner", "wins by", "over", "under"
-    ])
+    # Esports
+    if any(kw in t for kw in VIDEOGAME_KEYWORDS):
+        return WEBHOOK_VIDEOGAMES
 
-    if (has_nba_city or has_nba_player) and has_nba_context:
-        return WEBHOOK_NBA
+    # NBA — must match an actual NBA team name (not just a city)
+    has_nba_team = any(kw in t for kw in NBA_TEAMS)
+    has_nba_ctx  = any(kw in t for kw in NBA_CONTEXT)
 
-    # Sports multigame tickers with NBA players/cities
-    if ("kxmvesports" in t or "kxnba" in t) and (has_nba_city or has_nba_player):
+    if has_nba_team or has_nba_ctx:
         return WEBHOOK_NBA
 
     return WEBHOOK_OTHER
 
+
 def _route_name(title: str) -> str:
     t = title.lower()
-    if any(kw in t for kw in NBA_CITIES) or any(kw in t for kw in NBA_PLAYERS):
-        if not any(kw in t for kw in MLB_KEYWORDS):
-            return "NBA"
-    if any(kw in t for kw in MLB_KEYWORDS): return "MLB"
-    if any(kw in t for kw in TENNIS_KEYWORDS): return "TENNIS"
+    if any(kw in t for kw in MLB_KEYWORDS) or any(kw in t for kw in MLB_TEAMS):
+        return "MLB"
+    if any(kw in t for kw in TENNIS_KEYWORDS):
+        return "TENNIS"
+    if any(kw in t for kw in VIDEOGAME_KEYWORDS):
+        return "GAMES"
+    if any(kw in t for kw in NBA_TEAMS) or any(kw in t for kw in NBA_CONTEXT):
+        return "NBA"
     return "OTHER"
 
+
 def _bar(n: int) -> str:
-    return "█" * round(n / 10) + "░" * (10 - round(n / 10))
+    filled = round(n / 10)
+    return "█" * filled + "░" * (10 - filled)
 
 def _format_est(ts_str: str) -> str:
     try:
@@ -92,28 +106,27 @@ def _format_est(ts_str: str) -> str:
 
 
 def send_alert(trade: dict, market: dict, s: Score, same_side: int):
-    title = market.get("title") or trade.get("ticker", "Unknown")
+    title   = market.get("title") or trade.get("ticker", "Unknown")
     webhook = _get_webhook(title)
     if not webhook:
         return
 
-    ticker = trade.get("ticker", "")
-    taker  = trade.get("taker_side", "yes")
-    side   = "YES" if taker == "yes" else "NO"
-    side_e = "🟢" if side == "YES" else "🔴"
+    ticker  = trade.get("ticker", "")
+    taker   = trade.get("taker_side", "yes")
+    side    = "YES" if taker == "yes" else "NO"
+    side_e  = "🟢" if side == "YES" else "🔴"
 
     try:
-        yes_price = float(trade.get("yes_price_dollars") or 0)
-        no_price  = float(trade.get("no_price_dollars") or 0)
-        count     = float(trade.get("count_fp") or trade.get("count", 0))
+        yes_price   = float(trade.get("yes_price_dollars") or 0)
+        no_price    = float(trade.get("no_price_dollars") or 0)
+        count       = float(trade.get("count_fp") or trade.get("count", 0))
         price_cents = yes_price * 100 if taker == "yes" else no_price * 100
-        # Use pre-calculated USD from main if available, otherwise calculate
-        usd = trade.get("_usd") or (count * yes_price if taker == "yes" else count * no_price)
+        usd         = trade.get("_usd") or (count * yes_price if taker == "yes" else count * no_price)
     except Exception:
         return
 
-    ts       = trade.get("created_time", "")
-    cons_str = f"{same_side + 1} trades this side" if same_side > 0 else "first trade this side"
+    ts         = trade.get("created_time", "")
+    cons_str   = f"{same_side + 1} trades this side" if same_side > 0 else "first trade this side"
     market_url = f"https://kalshi.com/markets/{ticker.split('-')[0].lower()}" if ticker else "https://kalshi.com"
 
     embed = {
@@ -150,6 +163,6 @@ def send_alert(trade: dict, market: dict, s: Score, same_side: int):
     try:
         r = requests.post(webhook, json={"embeds": [embed]}, timeout=5)
         r.raise_for_status()
-        log.info(f"✅ [KALSHI {_route_name(title)}] ${usd:,.0f} {side} @ {price_cents:.1f}¢ [{s.total}/100]")
+        log.info(f"✅ [KALSHI {_route_name(title)}] ${usd:,.0f} {side} @ {price_cents:.1f}¢ [{s.total}/100] — {title[:50]}")
     except Exception as e:
         log.error(f"Discord failed: {e}")
